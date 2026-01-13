@@ -1,0 +1,5 @@
+pwntools
+requests
+pycryptodome
+python-magic
+colorama
