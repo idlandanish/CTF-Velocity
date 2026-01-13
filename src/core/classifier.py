@@ -5,7 +5,11 @@ Role: Identifies challenge type (Crypto, Web, Pwn, Forensics) based on input sig
 
 import os
 import re
-import magic  # Requires 'python-magic' or 'python-magic-bin'
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except ImportError:
+    MAGIC_AVAILABLE = False
 
 class Classifier:
     def __init__(self):
@@ -37,18 +41,39 @@ class Classifier:
 
     def _analyze_file(self, filepath):
         """Uses Magic Bytes to detect file type."""
+        
+        # PRIORITY 1: Check Extension for Source Code (Overrides magic for scripts)
+        # Magic often mistakes small .py files for generic text/plain
+        if filepath.lower().endswith('.py'):
+            return 'rev'
+        if filepath.lower().endswith('.c') or filepath.lower().endswith('.cpp'):
+            return 'rev'
+
+        # PRIORITY 2: Magic Bytes
+        if not MAGIC_AVAILABLE:
+            return 'misc'
+
         try:
-            # Get the MIME type (e.g., 'image/png')
             mime = magic.Magic(mime=True)
             file_type = mime.from_file(filepath)
             print(f"[+] Detected File Type: {file_type}")
 
-            # Match against our map
+            # SMART CHECK: If generic binary, check specific magic bytes manually
+            if file_type == 'application/octet-stream':
+                try:
+                    with open(filepath, 'rb') as f:
+                        header = f.read(4)
+                    if header.startswith(b'\x7fELF') or header.startswith(b'MZ'):
+                        return 'pwn'
+                except Exception:
+                    pass
+
+            # Match against our standard map
             category = self.mime_map.get(file_type, 'misc')
             
             # Special check: If it's a text file, it might be a key or source
             if 'text' in file_type and category == 'misc':
-                return 'crypto' # Default text files to crypto for analysis
+                return 'crypto' 
             
             return category
 
@@ -58,18 +83,13 @@ class Classifier:
 
     def _analyze_text(self, text):
         """Uses Regex patterns to detect Strings, URLs, hashes."""
-        # Check for Web URL
         if text.startswith('http://') or text.startswith('https://'):
             return 'web'
         
-        # Check for common encoding patterns (Base64)
-        # Pattern: Alphanumeric + '+' + '/' + '=' (padding)
         if re.match(r'^[A-Za-z0-9+/]+={0,2}$', text) and len(text) > 8:
             return 'crypto'
         
-        # Check for Hex strings (potential hashes or keys)
         if re.match(r'^[a-fA-F0-9]+$', text) and len(text) > 8:
             return 'crypto'
             
-        # Default fallback
         return 'misc'
