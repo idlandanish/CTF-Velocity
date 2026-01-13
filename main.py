@@ -11,10 +11,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.core.orchestrator import Orchestrator
 
 def main():
-    print("---------------------------------------")
-    print("      CTF COPILOT - v1.0 Alpha         ")
-    print("---------------------------------------")
-    
     if len(sys.argv) < 2:
         print("Usage: python main.py <target_file_or_string>")
         return
